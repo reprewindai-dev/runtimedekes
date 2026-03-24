@@ -1,0 +1,1 @@
+{"query": {"id": "test", "query": "test", "estimatedResults": 10}, "carbonBudget": 500, "regions": ["us-east-1", "us-west-2"]}

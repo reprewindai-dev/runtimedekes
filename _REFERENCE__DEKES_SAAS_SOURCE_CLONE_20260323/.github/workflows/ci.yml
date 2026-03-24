@@ -1,0 +1,392 @@
+name: DKS SaaS CI
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  ci:
+    name: DKS SaaS CI
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [20.x]
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Type check
+        run: npm run type-check
+        
+      - name: Lint
+        run: npm run lint
+        
+      - name: Build
+        run: npm run build
+        
+      - name: Validate auth structure
+        run: |
+          echo "🔐 Validating auth structure..."
+          
+          # Check critical auth files exist
+          auth_files=(
+            "app/auth/login/page.tsx"
+            "app/auth/signup/page.tsx"
+            "middleware.ts"
+            "app/dashboard/page.tsx"
+          )
+          
+          for file in "${auth_files[@]}"; do
+            if [ -f "$file" ]; then
+              echo "✅ $file exists"
+            else
+              echo "❌ $file missing"
+              exit 1
+            fi
+          done
+          
+      - name: Validate auth routes compile
+        run: |
+          echo "🛣️ Validating auth routes compilation..."
+          
+          # Check login page imports
+          node -e "
+            try {
+              require('./app/auth/login/page.tsx');
+              console.log('✅ Login route compiles');
+            } catch (e) {
+              console.error('❌ Login route failed:', e.message);
+              process.exit(1);
+            }
+          "
+          
+          # Check signup page imports
+          node -e "
+            try {
+              require('./app/auth/signup/page.tsx');
+              console.log('✅ Signup route compiles');
+            } catch (e) {
+              console.error('❌ Signup route failed:', e.message);
+              process.exit(1);
+            }
+          "
+          
+          # Check middleware compilation
+          node -e "
+            try {
+              require('./middleware.ts');
+              console.log('✅ Middleware compiles');
+            } catch (e) {
+              console.error('❌ Middleware failed:', e.message);
+              process.exit(1);
+            }
+          "
+          
+      - name: Validate app-shell routes
+        run: |
+          echo "🏠 Validating app-shell routes..."
+          
+          # Check dashboard compilation
+          node -e "
+            try {
+              require('./app/dashboard/page.tsx');
+              console.log('✅ Dashboard route compiles');
+            } catch (e) {
+              console.error('❌ Dashboard route failed:', e.message);
+              process.exit(1);
+            }
+          "
+          
+          # Check settings compilation
+          if [ -f "app/settings/page.tsx" ]; then
+            node -e "
+              try {
+                require('./app/settings/page.tsx');
+                console.log('✅ Settings route compiles');
+              } catch (e) {
+                console.error('❌ Settings route failed:', e.message);
+                process.exit(1);
+              }
+            "
+          fi
+          
+          # Check leads compilation
+          if [ -f "app/leads/page.tsx" ]; then
+            node -e "
+              try {
+                require('./app/leads/page.tsx');
+                console.log('✅ Leads route compiles');
+              } catch (e) {
+                console.error('❌ Leads route failed:', e.message);
+                process.exit(1);
+              }
+            "
+          fi
+          
+      - name: Validate middleware/session logic
+        run: |
+          echo "🔑 Validating middleware/session logic..."
+          
+          # Check middleware logic
+          node -e "
+            const fs = require('fs');
+            const middleware = fs.readFileSync('./middleware.ts', 'utf8');
+            
+            // Check for critical middleware components
+            const checks = [
+              { name: 'Token validation', pattern: /isTokenExpired/ },
+              { name: 'Protected routes', pattern: /PROTECTED_PREFIXES/ },
+              { name: 'Auth routes', pattern: /AUTH_ROUTES/ },
+              { name: 'Cookie handling', pattern: /DEKES_SESSION/ },
+              { name: 'Redirect logic', pattern: /NextResponse\.redirect/ }
+            ];
+            
+            checks.forEach(check => {
+              if (check.pattern.test(middleware)) {
+                console.log('✅', check.name, 'present');
+              } else {
+                console.error('❌', check.name, 'missing');
+                process.exit(1);
+              }
+            });
+          "
+          
+      - name: Validate API routes
+        run: |
+          echo "🔌 Validating API routes..."
+          
+          # Check auth API routes
+          api_routes=(
+            "app/api/auth/login/route.ts"
+            "app/api/auth/signup/route.ts"
+            "app/api/leads/run/route.ts"
+          )
+          
+          for route in "${api_routes[@]}"; do
+            if [ -f "$route" ]; then
+              node -e "
+                try {
+                  require('./$route');
+                  console.log('✅ $route compiles');
+                } catch (e) {
+                  console.error('❌ $route failed:', e.message);
+                  process.exit(1);
+                }
+              "
+            else
+              echo "⚠️ $route not found"
+            fi
+          done
+          
+      - name: Validate environment configuration
+        run: |
+          echo "🔧 Validating environment configuration..."
+          
+          # Check .env.example exists and has required vars
+          if [ -f ".env.example" ]; then
+            echo "✅ .env.example exists"
+            
+            required_vars=(
+              "DATABASE_URL"
+              "JWT_SECRET"
+              "NEXT_PUBLIC_APP_URL"
+              "CO2ROUTER_API_URL"
+            )
+            
+            for var in "${required_vars[@]}"; do
+              if grep -q "$var" .env.example; then
+                echo "✅ $var documented"
+              else
+                echo "⚠️ Consider documenting $var"
+              fi
+            done
+          else
+            echo "❌ .env.example missing"
+            exit 1
+          fi
+          
+      - name: Check for console.log statements
+        run: |
+          echo "🚫 Checking for debug statements..."
+          
+          # Look for console.log in source files (excluding node_modules)
+          if grep -r "console\.log" app/ --include="*.tsx" --include="*.ts" 2>/dev/null; then
+            echo "❌ Found console.log statements in production code"
+            echo "Remove console.log statements before merging"
+            exit 1
+          else
+            echo "✅ No console.log statements found"
+          fi
+          
+      - name: Validate redirect/auth logic
+        run: |
+          echo "🔄 Validating redirect/auth logic..."
+          
+          # Check for proper redirect patterns
+          node -e "
+            const fs = require('fs');
+            
+            // Check login page for proper redirect logic
+            if (fs.existsSync('./app/auth/login/page.tsx')) {
+              const loginContent = fs.readFileSync('./app/auth/login/page.tsx', 'utf8');
+              
+              if (loginContent.includes('router.push') && loginContent.includes('from')) {
+                console.log('✅ Login redirect logic present');
+              } else {
+                console.log('⚠️ Login redirect logic may be incomplete');
+              }
+            }
+            
+            // Check middleware for proper auth flow
+            const middlewareContent = fs.readFileSync('./middleware.ts', 'utf8');
+            
+            if (middlewareContent.includes('loginUrl.searchParams.set') && 
+                middlewareContent.includes('from') && 
+                middlewareContent.includes('pathname')) {
+              console.log('✅ Middleware redirect logic present');
+            } else {
+              console.error('❌ Middleware redirect logic incomplete');
+              process.exit(1);
+            }
+          "
+
+  auth-smoke-test:
+    name: Auth Smoke Test
+    runs-on: ubuntu-latest
+    needs: ci
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Setup test database
+        run: |
+          npx prisma db push --force-reset
+          npx prisma generate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          
+      - name: Build
+        run: npm run build
+        
+      - name: Start development server
+        run: |
+          npm start &
+          sleep 10
+        env:
+          PORT: 3001
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          JWT_SECRET: test_jwt_secret_for_ci
+          NEXT_PUBLIC_APP_URL: http://localhost:3001
+          
+      - name: Wait for server
+        run: |
+          timeout 30 bash -c 'until curl -f http://localhost:3001; do sleep 2; done'
+          
+      - name: Test auth flow
+        run: |
+          echo "🔐 Testing auth flow..."
+          
+          # Test login page loads
+          if curl -f -s http://localhost:3001/auth/login | grep -q "Welcome Back\|Log in"; then
+            echo "✅ Login page loads"
+          else
+            echo "❌ Login page failed to load"
+            exit 1
+          fi
+          
+          # Test signup page loads
+          if curl -f -s http://localhost:3001/auth/signup | grep -q "Sign up\|Create account"; then
+            echo "✅ Signup page loads"
+          else
+            echo "❌ Signup page failed to load"
+            exit 1
+          fi
+          
+          # Test protected route redirects to login
+          redirect_test=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001/dashboard)
+          if [ "$redirect_test" = "307" ] || [ "$redirect_test" = "302" ]; then
+            echo "✅ Protected routes redirect to auth"
+          else
+            echo "⚠️ Protected route redirect may need attention (status: $redirect_test)"
+          fi
+          
+          # Test auth API endpoints exist
+          if curl -f -s http://localhost:3001/api/auth/login -X POST -H "Content-Type: application/json" -d '{}'; then
+            echo "✅ Auth API endpoints respond"
+          else
+            echo "⚠️ Auth API endpoints may need database setup"
+          fi
+          
+          echo "🎉 Auth smoke tests passed!"
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: ci
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Run npm audit
+        run: npm audit --audit-level=high
+        continue-on-error: true
+        
+      - name: Check for secrets
+        uses: trufflesecurity/trufflehog@main
+        with:
+          base: main
+          head: HEAD
+          extra_args: --debug --only-verified

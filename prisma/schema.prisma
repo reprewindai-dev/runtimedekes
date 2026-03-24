@@ -1,0 +1,368 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  passwordHash  String
+  name          String?
+  status        UserStatus     @default(ACTIVE)
+  platformRole  PlatformRole   @default(CUSTOMER)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  memberships   Membership[]
+  sessions      Session[]
+  queries       Query[]        @relation("QueryCreator")
+  runs          Run[]          @relation("RunInitiator")
+  apiKeys       ApiKey[]
+  outreach      OutreachAction[]
+  auditEvents   AuditEvent[]
+}
+
+enum UserStatus {
+  ACTIVE
+  INVITED
+  SUSPENDED
+}
+
+enum PlatformRole {
+  CUSTOMER
+  OPERATOR
+  SUPER_ADMIN
+}
+
+model Organization {
+  id              String            @id @default(cuid())
+  name            String
+  slug            String            @unique
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  memberships     Membership[]
+  subscriptions   Subscription[]
+  queries         Query[]
+  runs            Run[]
+  leads           Lead[]
+  usageRecords    UsageRecord[]
+  auditEvents     AuditEvent[]
+  apiKeys         ApiKey[]
+  outreachActions OutreachAction[]
+}
+
+model Membership {
+  id              String          @id @default(cuid())
+  userId          String
+  organizationId  String
+  role            MembershipRole
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@index([organizationId, role])
+}
+
+enum MembershipRole {
+  OWNER
+  ADMIN
+  ANALYST
+  VIEWER
+}
+
+model Session {
+  id            String    @id @default(cuid())
+  userId        String
+  tokenHash     String    @unique
+  expiresAt     DateTime
+  ipAddress     String?
+  userAgent     String?
+  createdAt     DateTime  @default(now())
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model Plan {
+  id                 String          @id @default(cuid())
+  code               String          @unique
+  name               String
+  description        String
+  monthlyPriceCents  Int
+  monthlyQueryLimit  Int
+  monthlyLeadLimit   Int
+  monthlyUserLimit   Int
+  featureFlags       Json            @default("{}")
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  subscriptions      Subscription[]
+}
+
+model Subscription {
+  id                    String              @id @default(cuid())
+  organizationId        String
+  planId                String
+  status                SubscriptionStatus  @default(TRIALING)
+  stripeCustomerId      String?             @unique
+  stripeSubscriptionId  String?             @unique
+  stripePriceId         String?
+  currentPeriodStart    DateTime?
+  currentPeriodEnd      DateTime?
+  cancelAtPeriodEnd     Boolean             @default(false)
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  organization          Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan                  Plan                @relation(fields: [planId], references: [id])
+
+  @@index([organizationId, status])
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  UNPAID
+  INCOMPLETE
+}
+
+model UsageRecord {
+  id              String      @id @default(cuid())
+  organizationId  String
+  queryId         String?
+  runId           String?
+  metric          UsageMetric
+  quantity        Int
+  periodStart     DateTime
+  periodEnd       DateTime
+  createdAt       DateTime    @default(now())
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  query           Query?      @relation(fields: [queryId], references: [id], onDelete: SetNull)
+  run             Run?        @relation(fields: [runId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, metric, createdAt])
+}
+
+enum UsageMetric {
+  QUERY_RUN
+  RAW_RESULTS
+  QUALIFIED_LEAD
+  SEND_NOW_LEAD
+}
+
+model Query {
+  id              String       @id @default(cuid())
+  organizationId  String
+  createdById     String
+  name            String
+  description     String?
+  input           String
+  market          String       @default("en-US")
+  status          QueryStatus   @default(ACTIVE)
+  lastRunAt       DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy       User          @relation("QueryCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  runs            Run[]
+  leads           Lead[]
+  usageRecords    UsageRecord[]
+
+  @@index([organizationId, createdAt])
+}
+
+enum QueryStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+model Run {
+  id                    String       @id @default(cuid())
+  organizationId        String
+  queryId               String
+  initiatedById         String
+  status                RunStatus    @default(PROCESSING)
+  startedAt             DateTime     @default(now())
+  completedAt           DateTime?
+  rawResultCount        Int          @default(0)
+  keptResultCount       Int          @default(0)
+  qualifiedLeadCount    Int          @default(0)
+  rejectedLeadCount     Int          @default(0)
+  errorMessage          String?
+  ecobeDecisionId       String?
+  ecobeRegion           String?
+  ecobeAction           String?
+  ecobeCarbonDelta      Float?
+  controlPlaneTraceId   String?
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  query                 Query        @relation(fields: [queryId], references: [id], onDelete: Cascade)
+  initiatedBy           User         @relation("RunInitiator", fields: [initiatedById], references: [id], onDelete: Cascade)
+  leads                 Lead[]
+  usageRecords          UsageRecord[]
+
+  @@index([organizationId, startedAt])
+  @@index([queryId, status])
+}
+
+enum RunStatus {
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model Lead {
+  id                   String              @id @default(cuid())
+  organizationId       String
+  queryId              String?
+  runId                String?
+  status               LeadStatus          @default(HOLD)
+  companyName          String
+  domain               String?
+  sourceTitle          String?
+  sourceUrl            String
+  canonicalUrl         String
+  snippet              String?
+  country              String?
+  score                Int
+  whyBuying            String
+  whyNow               String
+  outreachAngle        String
+  recentActivity       String
+  businessContext      String
+  intentSummary        String
+  buyingStage          String
+  timingWindowDays     Int
+  strongSignalCount    Int
+  isLocked             Boolean             @default(false)
+  evidenceSummary      String?
+  qualificationNotes   String?
+  contactName          String?
+  contactEmail         String?
+  employeeBand         String?
+  meta                 Json                @default("{}")
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  organization         Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  query                Query?              @relation(fields: [queryId], references: [id], onDelete: SetNull)
+  run                  Run?                @relation(fields: [runId], references: [id], onDelete: SetNull)
+  leadEvidence         LeadEvidence[]
+  enrichmentRecords    EnrichmentRecord[]
+  outreachActions      OutreachAction[]
+
+  @@unique([organizationId, canonicalUrl])
+  @@index([organizationId, status, score])
+  @@index([queryId, createdAt])
+}
+
+enum LeadStatus {
+  SEND_NOW
+  QUEUE
+  HOLD
+  REJECTED
+}
+
+model LeadEvidence {
+  id           String    @id @default(cuid())
+  leadId       String
+  signalKey    String?
+  isStrong     Boolean   @default(false)
+  sourceType   String
+  label        String
+  excerpt      String
+  sourceUrl    String
+  confidence   Float     @default(0.5)
+  createdAt    DateTime  @default(now())
+  lead         Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId, createdAt])
+}
+
+model EnrichmentRecord {
+  id           String            @id @default(cuid())
+  leadId       String
+  provider     String
+  status       EnrichmentStatus
+  payload      Json              @default("{}")
+  createdAt    DateTime          @default(now())
+  lead         Lead              @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId, provider])
+}
+
+enum EnrichmentStatus {
+  PENDING
+  ENRICHED
+  FAILED
+}
+
+model OutreachAction {
+  id              String           @id @default(cuid())
+  organizationId  String
+  leadId          String
+  actorId         String?
+  channel         OutreachChannel
+  status          OutreachStatus
+  notes           String?
+  createdAt       DateTime         @default(now())
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lead            Lead             @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  actor           User?            @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status])
+  @@index([leadId, createdAt])
+}
+
+enum OutreachChannel {
+  EMAIL
+  LINKEDIN
+  CALL
+  WORKFLOW
+}
+
+enum OutreachStatus {
+  DRAFTED
+  SENT
+  REPLIED
+  BOUNCED
+  BOOKED
+  WON
+}
+
+model AuditEvent {
+  id              String       @id @default(cuid())
+  organizationId  String
+  actorId         String?
+  eventType       String
+  entityType      String
+  entityId        String
+  payload         Json         @default("{}")
+  createdAt       DateTime     @default(now())
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actor           User?        @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+}
+
+model ApiKey {
+  id              String       @id @default(cuid())
+  organizationId  String
+  createdById     String
+  name            String
+  prefix          String
+  secretHash      String       @unique
+  lastUsedAt      DateTime?
+  revokedAt       DateTime?
+  createdAt       DateTime     @default(now())
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy       User         @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, revokedAt])
+}

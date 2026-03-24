@@ -1,0 +1,54 @@
+services:
+  - type: web
+    name: dekes-signed-runtime-app
+    runtime: docker
+    plan: free
+    region: oregon
+    branch: main
+    autoDeploy: true
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: APP_NAME
+        value: DEKES
+      - key: APP_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: SEARCH_PROVIDER
+        value: serpapi
+      - key: SERPAPI_API_KEY
+        sync: false
+      - key: SERPER_API_KEY
+        sync: false
+      - key: BRAVE_SEARCH_API_KEY
+        sync: false
+      - key: ENRICHMENT_USER_AGENT
+        value: DEKES Runtime/1.0 (+https://dekes.app)
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+        sync: false
+      - key: STRIPE_STARTER_PRICE_ID
+        sync: false
+      - key: STRIPE_GROWTH_PRICE_ID
+        sync: false
+      - key: STRIPE_PRO_PRICE_ID
+        sync: false
+      - key: CONTROL_PLANE_BASE_URL
+        sync: false
+      - key: CONTROL_PLANE_API_KEY
+        sync: false
+      - key: ECOBE_BASE_URL
+        sync: false
+      - key: ECOBE_API_KEY
+        sync: false
+      - key: EXECUTION_API_TIMEOUT_MS
+        value: "15000"

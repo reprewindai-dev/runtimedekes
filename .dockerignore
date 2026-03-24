@@ -1,0 +1,10 @@
+.git
+.next
+node_modules
+coverage
+.env
+.env.local
+dist
+*.log
+tsconfig.tsbuildinfo
+_REFERENCE__DEKES_SAAS_SOURCE_CLONE_20260323
