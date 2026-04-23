@@ -28,6 +28,9 @@ export const env = {
   executionTimeoutMs: toNumber(process.env.EXECUTION_API_TIMEOUT_MS, 12000),
 }
 
+export const isEcobeConfigured = Boolean(env.ecobeBaseUrl && env.ecobeApiKey)
+export const isControlPlaneConfigured = Boolean(env.controlPlaneBaseUrl && env.controlPlaneApiKey)
+
 export const isBillingEnabled = Boolean(
   env.stripeSecretKey &&
     env.stripeWebhookSecret &&

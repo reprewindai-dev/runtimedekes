@@ -29,6 +29,7 @@ That means the deployment is correct in either mode:
 
 - without Seked/control-plane env vars, DEKES still runs
 - with Seked/control-plane env vars, governed runs are activated for plans that allow it
+- when governed runs are activated, DEKES fails closed if the control plane call fails instead of silently bypassing governance
 
 ### ECOBE
 
@@ -59,3 +60,9 @@ ECOBE routing is also adapter-driven and optional:
 ### Important deployment note
 
 This signed app should not deploy from the inherited unrelated Git remote. It should live in its own Git repository or another dedicated remote that points to this folder's code.
+
+### Verification after deploy
+
+- open `/api/health`
+- confirm `controlPlane.mode` is `active_for_governed_plans` if Seked env vars are set
+- confirm `ecobe.mode` is `active_for_paid_plans` if ECOBE env vars are set

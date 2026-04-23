@@ -5,11 +5,9 @@ import { searchWeb } from '@/lib/adapters/execution-client'
 import { routeDekesExecution } from '@/lib/adapters/ecobe-client'
 import { validateGovernedRun } from '@/lib/adapters/control-plane-client'
 import { getEntitlements, recordUsage } from '@/lib/billing/entitlements'
+import { isControlPlaneConfigured, isEcobeConfigured } from '@/lib/env'
 import { packageBuyerIntelligence } from '@/lib/leads/signal-pipeline'
-
-function featureEnabled(flags: unknown, key: string) {
-  return typeof flags === 'object' && flags !== null && key in flags && Boolean((flags as Record<string, unknown>)[key])
-}
+import { shouldUseControlPlane, shouldUseEcobe } from '@/lib/runtime-capabilities'
 
 function isQualified(status: LeadStatus) {
   return status === 'SEND_NOW' || status === 'QUEUE' || status === 'HOLD'
@@ -75,7 +73,7 @@ export async function executeQueryRun(input: {
     throw new Error('Query not found')
   }
 
-  const ecobeDecision = featureEnabled(entitlements.plan.featureFlags, 'ecobeRouting')
+  const ecobeDecision = shouldUseEcobe(entitlements.plan.featureFlags, isEcobeConfigured)
     ? await routeDekesExecution({
         organizationId: input.organizationId,
         source: query.name,
@@ -118,12 +116,15 @@ export async function executeQueryRun(input: {
       quantity: rawResults.length,
     })
 
-    const controlPlane = featureEnabled(entitlements.plan.featureFlags, 'controlPlaneValidation')
+    const controlPlane = shouldUseControlPlane(
+      entitlements.plan.featureFlags,
+      isControlPlaneConfigured,
+    )
       ? await validateGovernedRun({
           organizationSlug: input.organizationSlug,
           queryText: query.input,
           resultCount: rawResults.length,
-        }).catch(() => null)
+        })
       : null
 
     const pipeline = await packageBuyerIntelligence(query.input, rawResults, {

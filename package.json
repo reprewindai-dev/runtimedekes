@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/**/*.test.ts",
     "benchmark:quality": "tsx scripts/benchmark-pipeline.ts",
+    "self-run": "node scripts/self-run.mjs",
     "db:bootstrap": "tsx scripts/bootstrap-plans.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev"

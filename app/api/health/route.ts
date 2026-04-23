@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { db } from '@/lib/db'
-import { env } from '@/lib/env'
+import { env, isControlPlaneConfigured, isEcobeConfigured } from '@/lib/env'
 
 export async function GET() {
   try {
@@ -11,8 +11,16 @@ export async function GET() {
       ok: true,
       app: env.appName,
       database: 'reachable',
-      controlPlaneConfigured: Boolean(env.controlPlaneBaseUrl && env.controlPlaneApiKey),
-      ecobeConfigured: Boolean(env.ecobeBaseUrl && env.ecobeApiKey),
+      controlPlane: {
+        configured: isControlPlaneConfigured,
+        governedPlans: ['GROWTH', 'PRO'],
+        mode: isControlPlaneConfigured ? 'active_for_governed_plans' : 'disabled',
+      },
+      ecobe: {
+        configured: isEcobeConfigured,
+        enabledPlans: ['STARTER', 'GROWTH', 'PRO'],
+        mode: isEcobeConfigured ? 'active_for_paid_plans' : 'disabled',
+      },
     })
   } catch (error) {
     return NextResponse.json(

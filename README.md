@@ -36,3 +36,8 @@ DEKES is the customer-facing lead intelligence and buyer qualification product s
 - The app fails closed when required provider credentials are missing.
 - Stripe billing is active only when Stripe keys and plan price IDs are configured.
 - ECOBE and control-plane integrations are optional and adapter-driven.
+
+## Automation
+
+- `npm run self-run` runs typecheck, tests, build, and any configured live smoke or benchmark steps.
+- `.github/workflows/self-run.yml` runs that automation on push to `main` and on a daily schedule.
