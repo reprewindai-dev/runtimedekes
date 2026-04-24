@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { db } from '@/lib/db'
 import { env, isControlPlaneConfigured, isEcobeConfigured } from '@/lib/env'
+import { isBillingEnabled, isSearchConfigured } from '@/lib/env'
 
 export async function GET() {
   try {
@@ -20,6 +21,14 @@ export async function GET() {
         configured: isEcobeConfigured,
         enabledPlans: ['STARTER', 'GROWTH', 'PRO'],
         mode: isEcobeConfigured ? 'active_for_paid_plans' : 'disabled',
+      },
+      search: {
+        configured: isSearchConfigured,
+        mode: isSearchConfigured ? 'active_for_query_runs' : 'disabled',
+      },
+      billing: {
+        configured: isBillingEnabled,
+        mode: isBillingEnabled ? 'active_for_paid_plans' : 'disabled',
       },
     })
   } catch (error) {
