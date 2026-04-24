@@ -2,7 +2,7 @@ services:
   - type: web
     name: dekes-signed-runtime-app
     runtime: docker
-    plan: free
+    plan: starter
     region: oregon
     branch: main
     autoDeploy: true
@@ -17,7 +17,9 @@ services:
       - key: APP_URL
         sync: false
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: dekes-signed-runtime-db
+          property: connectionString
       - key: SESSION_SECRET
         generateValue: true
       - key: SEARCH_PROVIDER
@@ -52,3 +54,8 @@ services:
         sync: false
       - key: EXECUTION_API_TIMEOUT_MS
         value: "15000"
+
+databases:
+  - name: dekes-signed-runtime-db
+    plan: basic-1gb
+    databaseName: dekes_saas
