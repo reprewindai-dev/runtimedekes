@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "prisma generate && next build",
     "prestart": "node scripts/validate-runtime-env.mjs",
-    "start": "prisma db push --accept-data-loss && next start",
+    "start": "node scripts/start-production.mjs",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/**/*.test.ts",
@@ -14,7 +14,8 @@
     "self-run": "node scripts/self-run.mjs",
     "db:bootstrap": "tsx scripts/bootstrap-plans.ts",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev"
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy"
   },
   "dependencies": {
     "@prisma/client": "5.22.0",
