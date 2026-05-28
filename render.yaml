@@ -20,6 +20,8 @@ services:
         fromDatabase:
           name: dekes-signed-runtime-db
           property: connectionString
+      - key: DIRECT_URL
+        sync: false
       - key: SESSION_SECRET
         generateValue: true
       - key: SEARCH_PROVIDER
